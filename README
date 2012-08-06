@@ -1,0 +1,5 @@
+How to install:
+ 
+ - install node modules: connect, pause, send, socket.io
+ - copy 'js/config.TEMPLATE.js' to 'js/config.js' and configure it to suite your needs
+ - run 'node server.js'
