@@ -1,0 +1,59 @@
+#layout table{
+  border: 1px solid #ccc;
+  padding: 2px;
+}
+#layout table{
+  border-spacing: 1px;
+}
+#layout td{
+  width: 26px;
+  height: 26px;
+  line-height: 26px;
+  padding: 0;
+  text-align: center;
+}
+#layout td.empty{
+  background: #eee;
+  cursor: pointer;
+}
+#layout td.hovered{
+  background: lightgreen;
+}
+#layout td.marked{
+  background: lightblue;
+}
+#layout td.selected{
+  background: crimson!important;
+}
+#layout td.locked{
+  background: #888;
+  color: #fff;
+  cursor: pointer;
+}
+#layout td.reserved{
+  background: #fa0;
+  color: #fff;
+  cursor: pointer;
+}
+#layout .row-name{
+  background: orange;
+}
+
+#menu{
+  float: right;
+  border: 1px solid #ccc;
+  background: #eaeaea;
+  width: 340px;
+}
+
+#menu #status{
+  border: 1px solid #999;
+  background: #fff;
+  max-height: 420px;
+  margin: 5px 2px;
+  padding: 0;
+  font-family: trebuchet, verdana, arial;
+  font-size: 9pt;
+  list-style-type: none;
+  overflow: auto;
+}
