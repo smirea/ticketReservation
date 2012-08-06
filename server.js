@@ -9,10 +9,12 @@ var connect = require('connect');
 var fs = require('fs');
 
 var PORT = config.server.port;
-var backupDir = 'backup/';
+var backupDir = config.server.backupDir;
 var lastStatePath = backupDir + '-last-state.json';
 var saveInterval = config.server.saveInterval;
 var backupInterval = config.server.backupInterval;
+
+var reservations = [];
 
 /** set-up the server **/
 var app = connect.createServer(
@@ -21,10 +23,7 @@ var app = connect.createServer(
 
 var io = require('socket.io').listen(app);
 
-var clients = {};
-
 io.sockets.on('connection', function (socket) {
-  clients[socket.id] = socket;
   console.info('[SOCKET] Connected:' + socket.id);
   setupSocket(socket);
   var stateObject = getStateObject();
@@ -38,6 +37,7 @@ console.info('Listening on port: `' + PORT + '`');
 // config app logic
 var layout = new Layout(config.layout);
 
+// restore state if backup file exists
 if (fs.existsSync(lastStatePath)) {
   try {
     var state = fs.readFileSync(lastStatePath);
@@ -61,7 +61,7 @@ if (fs.existsSync(lastStatePath)) {
 
 var saveTimeout = setTimeout(function _saveTimeout () {
   saveStatus();
-  setTimeout( _saveTimeout, saveInterval );
+  setTimeout(_saveTimeout, saveInterval);
 }, saveInterval);
 
 /** Functions **/
@@ -95,6 +95,7 @@ function backupFilePath (date) {
 
 function getStateObject () {
   return {
+    reservations: reservations,
     options: layout.options,
     TYPES: layout.TYPES,
     map: layout.getComponents().map,
@@ -103,15 +104,15 @@ function getStateObject () {
 }
 
 function setupSocket (socket) {
-  socket.on('reserve', function _onReserve (seats, callback) {
+  socket.on('reserve', function _onReserve (name, email, seats, callback) {
     var error = null;
-    var toReserve = [];
+    var splitSeats = [];
     for (var i=0; i<seats.length; ++i) {
-      var arr = seats[i].split('-');
-      if (arr.length === 2) {
-        var oldType = layout.getType(arr[0], arr[1]);
+      splitSeats[i] = seats[i].split('-');
+      if (splitSeats[i].length === 2) {
+        var oldType = layout.getType.apply(layout, splitSeats[i]);
         if (oldType === layout.TYPES.EMPTY || oldType === layout.TYPES.LOCKED) {
-          toReserve.push(arr);
+          // everything OK!
         } else {
           error = 'Seat number `' + seats[i] + '` is not available';
           break;
@@ -122,28 +123,26 @@ function setupSocket (socket) {
       }
     }
 
-    if (toReserve.length === seats.length) {
-      for (var i=0; i<toReserve.length; ++i) {
-        layout.reserve(toReserve[i][0], toReserve[i][1]);
+    if (splitSeats.length === seats.length) {
+      var codes = {};
+      for (var i=0; i<seats.length; ++i) {
+        layout.reserve.apply(layout, splitSeats[i]);
+        codes[seats[i]] = layout.getCode.apply(layout, splitSeats[i]);
       }
-      var sendObject = [];
-      for (var i=0; i<toReserve.length; ++i) {
-        sendObject.push({
-          row: toReserve[i][0],
-          column: toReserve[i][1],
-          code: layout.getCode.apply(layout, toReserve[i])
-        });
-      }
-      socket.emit('reserve', sendObject);
-      socket.broadcast.emit('reserve', sendObject.map(function _deleteCode (r) {
-        delete r.code;
-        return r;
-      }));
+      var reservationObject = {
+        number: reservations.length+1,
+        name: name,
+        email: email,
+        codes: codes    // maps: seat_name -> seat_code
+      };
+      reservations.push(reservationObject);
+      callback(reservationObject);
+      socket.broadcast.emit('reserve', seats);
     } else if (!error) {
       error = 'Something went wrong, seats not reserved!';
     }
 
-    callback(error);
+    callback(null, error);
   })
   .on('setType', function _onSetType (row, column, type, errorCallback) {
     var oldType = layout.getType(row, column);
@@ -165,7 +164,6 @@ function setupSocket (socket) {
     socket.emit('echo', 'ECHO: ' + data);
   })
   .on('disconnect', function _onDisconnect (data) {
-    delete clients[socket.id];
     console.info('[SOCKET] Disconnected:' + socket.id);
   });
 }

@@ -7,6 +7,12 @@ var typeList;
 var menu;
 var $layoutWrapper;
 
+if (typeof String.prototype.trim !== 'function') {
+  String.prototype.trim = function _trim () {
+    return this.replace(/^\s\s*/, '').replace(/\s\s*$/, '');
+  }
+}
+
 (function _main ($, undefined) {
   $.fn.disableSelection = function () {
     return this.each(function () {
@@ -49,34 +55,97 @@ var $layoutWrapper;
     addEvents(layout);
 
     setupMenu();
+    menu.reserve.name.val('Tester');
+    menu.reserve.email.val('theTest@testy.de');
   });
 
   function setupMenu () {
     menu = {
       main: jqElement('div'),
       status: jqElement('ul'),
-      reserveBtn: jqElement('input')
+      reserve: {
+        main: jqElement('div'),
+        name: jqElement('input'),
+        email: jqElement('input'),
+        submit: jqElement('input')
+      }
     };
 
-    menu.status.attr('id', 'status');
+    menu.status.attr({
+      id: 'status',
+      'class': 'section'
+    });
 
-    menu.reserveBtn
-      .attr({
-        id: 'reserve',
-        type: 'button',
-        value: 'Reserve'
-      })
+    menu.reserve.name.attr({
+      type: 'text',
+      placeholder: 'name ...'
+    });
+
+    menu.reserve.email.attr({
+      type: 'text',
+      placeholder: 'email ...'
+    });
+
+    menu.reserve.submit.attr({
+      type: 'button',
+      value: 'Reserve'
+    });
+
+    menu.reserve.main.attr({
+      id: 'reserve',
+      'class': 'section'
+    }).append(
+      menu.reserve.name,
+      menu.reserve.email,
+      menu.reserve.submit
+    );
+
+    menu.reserve.submit
       .on('click.reserve', function _reserve () {
-        var seats = Object.keys(selection).map(function _removePrefix (r) {
-          return r.slice(layout.options.seatSeparator.length +
-                          layout.options.seatPrefix.length);
-        });
-        if (confirm('Reserving the following seats: '+seats.join(', '))) {
-          socket.emit('reserve', seats, function _doneCallback (error) {
-            if (error) {
-              statusUpdate(error, 'error');
-            }
+        var name = menu.reserve.name.val().trim();
+        var email = menu.reserve.email.val().trim();
+        var emailRegExp = /^[a-zA-Z0-9\-_.]+@[a-zA-Z0-9\-_]+\.[a-z]{2,3}$/;
+
+        if (Object.keys(selection).length === 0) {
+          statusUpdate('No seats selected!', 'error');
+        } else if (!name || name.length < 4) {
+          menu.reserve.name.focus();
+          statusUpdate('Name must have at least 4 characters', 'error');
+        } else if (!email || !emailRegExp.test(email)) {
+          menu.reserve.email.focus();
+          statusUpdate('Invalid email', 'error');
+        } else {
+          var seats = Object.keys(selection).map(function _removePrefix (r) {
+            return r.slice(layout.options.seatSeparator.length +
+                            layout.options.seatPrefix.length);
           });
+          if (confirm('Reserving the following seats: '+seats.join(', '))) {
+            socket.emit('reserve', name, email, seats, function (result, error){
+              if (error) {
+                statusUpdate(error, 'error');
+              } else {
+                reserveSeats(Object.keys(result.codes));
+                var codes = [];
+                for (var seat in result.codes) {
+                  codes.push(
+                    '<tr>' +
+                      '<td><b>'+ seat +':</b></td>'+
+                      '<td> ' + result.codes[seat] + '</td>' +
+                    '</tr>'
+                  );
+                };
+                statusUpdate('Reservation complete! ' +
+                              '<div><b>number:</b> ' + result.number + '</div>'+
+                              '<div><b>name:</b> ' + result.name + '</div>' +
+                              '<div><b>email:</b> ' + result.email + '</div>' +
+                              '<table>' +
+                                '<tr><th colspan="2">Codes:</th></tr>' +
+                                codes.join("\n") +
+                              '</table>'
+                );
+              }
+            });
+          }
         }
       });
 
@@ -85,7 +154,7 @@ var $layoutWrapper;
       .insertBefore($layoutWrapper)
       .append(
         menu.status,
-        menu.reserveBtn
+        menu.reserve.main
       );
   }
 
@@ -94,33 +163,12 @@ var $layoutWrapper;
       layout.loadState(state);
       $layoutWrapper.empty();
       $layoutWrapper.html(layout.toElement());
+      selection = {};
       addEvents(layout);
     })
-    .on('reserve', function _onReserve (seats) {
-      if (seats.length === 0) {
-        return;
-      }
-      for (var i=0; i<seats.length; ++i) {
-        layout.reserve(seats[i].row, seats[i].column);
-        delete selection[layout.makeID(seats[i].row, seats[i].column)];
-      }
-      if (!!seats[0].code) {
-        var codes = seats.map(function _getCodeMessage (seat) {
-          return seat.row + '-' + seat.column + ': ' + seat.code;
-        });
-        statusUpdate('Reservation complete! Codes:<br />'+codes.join('<br />'));
-      } else {
-        //TODO: who reserved which seats maybe? :)
-      }
-    })
+    .on('reserve', reserveSeats)
     .on('setType', function _onSetType (row, column, type) {
       var oldType = layout.getType(row, column);
-      /*
-      if (oldType !== layout.TYPES.EMPTY) {
-        statusUpdate('Seat ' + row + '-' + column + ' changed from ' +
-                      typeList[oldType] + ' to ' + typeList[type]);
-      }
-      */
       layout.setType(row, column, type);
     })
     .on('statusUpdate', function _statusUpdate (content, type) {
@@ -132,6 +180,17 @@ var $layoutWrapper;
     .on('disconnect', function _onDisconnect () {
       console.info('[SOCKET] Disconnected');
     });
+  }
+
+  function reserveSeats (seats) {
+    if (seats.length === 0) {
+      return;
+    }
+    for (var i=0; i<seats.length; ++i) {
+      var arr = seats[i].split('-');
+      layout.reserve(arr[0], arr[1]);
+      delete selection[layout.makeID(arr[0], arr[1])];
+    }
   }
 
   function statusUpdate (content, type) {
@@ -168,6 +227,7 @@ var $layoutWrapper;
         } else {
           console.warn('[addEvents] This is bad', this.id, arguments);
         }
+        menu.reserve.name.focus();
       });
   }
 

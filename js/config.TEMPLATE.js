@@ -4,6 +4,7 @@ var config = {
   },
   server: {
     port: 6969,
+    backupDir: 'backup/',
     saveInterval: 3 * 1000,
     backupInterval: 1 * 3600 * 1000
   },

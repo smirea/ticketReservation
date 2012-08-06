@@ -44,16 +44,31 @@
   border: 1px solid #ccc;
   background: #eaeaea;
   width: 340px;
-}
-
-#menu #status{
-  border: 1px solid #999;
-  background: #fff;
-  max-height: 420px;
-  margin: 5px 2px;
-  padding: 0;
   font-family: trebuchet, verdana, arial;
   font-size: 9pt;
+  color: #444;
+}
+#menu table {
+  border: 1px solid #ccc;
+  border-collapse: collapse;
+  padding: 2px;
+  font-family: sans-serif, arial, verdana;
+  font-size: 9pt;
+}
+#menu table tr:nth-child(2n+1){
+  background-color: #cff;
+}
+#menu .section {
+  border: 1px solid #999;
+  background: #fff;
+  margin: 3px;
+  padding: 2px;
+}
+#menu #status{
+  max-height: 420px;
   list-style-type: none;
   overflow: auto;
+}
+#menu #reserve{
+
 }
