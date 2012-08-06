@@ -16,6 +16,9 @@ var backupInterval = config.server.backupInterval;
 
 var reservations = [];
 
+// the server's session
+var session = Math.floor(Math.random() * 100000000);
+
 /** set-up the server **/
 var app = connect.createServer(
   connect.static(__dirname)
@@ -24,19 +27,28 @@ var app = connect.createServer(
 var io = require('socket.io').listen(app);
 
 io.sockets.on('connection', function (socket) {
-  console.info('[SOCKET] Connected:' + socket.id);
-  setupSocket(socket);
-  var stateObject = getStateObject();
-  delete stateObject.codes;
-  delete stateObject.reservations;
-  stateObject.reservations = [];
-  for (var i=0; i<reservations.length; ++i) {
-    var newReservation = cloneObject(reservations[i]);
-    newReservation.seats = Object.keys(newReservation.codes);
-    delete newReservation.codes;
-    stateObject.reservations[i] = newReservation;
-  }
-  socket.emit('loadState', stateObject);
+  console.info('[SOCKET] Checking session:' + socket.id);
+  // if the client's session is different from the server's session
+  // the client will be forced to refresh
+  socket.emit('checkSession', session, function (ok) {
+    if (!ok) {
+      console.info('[SOCKET] Forced refresh:' + socket.id);
+      return;
+    }
+    console.info('[SOCKET] Connected:' + socket.id);
+    setupSocket(socket);
+    var stateObject = getStateObject();
+    delete stateObject.codes;
+    delete stateObject.reservations;
+    stateObject.reservations = [];
+    for (var i=0; i<reservations.length; ++i) {
+      var newReservation = cloneObject(reservations[i]);
+      newReservation.seats = Object.keys(newReservation.codes);
+      delete newReservation.codes;
+      stateObject.reservations[i] = newReservation;
+    }
+    socket.emit('loadState', stateObject);
+  });
 });
 
 console.info('Listening on port: `' + PORT + '`');

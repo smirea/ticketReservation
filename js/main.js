@@ -8,6 +8,8 @@ var menu;
 var $layoutWrapper;
 var reservations = [];
 
+var session = null;
+
 if (typeof String.prototype.trim !== 'function') {
   String.prototype.trim = function _trim () {
     return this.replace(/^\s\s*/, '').replace(/\s\s*$/, '');
@@ -229,6 +231,19 @@ function setupSocket () {
   })
   .on('statusUpdate', function _statusUpdate (title, content, type) {
     statusUpdate(title, content, type);
+  })
+  .on('checkSession', function _onCheckSession (serverSession, callback) {
+    console.log(session, arguments);
+    if (session === null) {
+      session = serverSession;
+      callback(true);
+      return;
+    } else if (session !== serverSession) {
+      callback(false);
+      window.location.reload();
+      return;
+    }
+    callback(true);
   })
   .on('connect', function _onConnect () {
     console.info('[SOCKET] Connected');
