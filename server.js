@@ -1,22 +1,18 @@
 
-// options
-var PORT = 6969;
-
-// save & backup options
-var backupDir = 'backup/';
-var lastStatePath = backupDir + '-last-state.json';
-var saveInterval = 3 * 1000;
-var backupInterval = 1 * 3600 * 1000;
-
 // custom files
 var config = require('./js/config.js').config;
 var Class = require('./js/Class.js').Class;
 var Layout = require('./js/Layout.js').Layout;
 
 // standard libraries
-var util = require('util');
 var connect = require('connect');
 var fs = require('fs');
+
+var PORT = config.server.port;
+var backupDir = 'backup/';
+var lastStatePath = backupDir + '-last-state.json';
+var saveInterval = config.server.saveInterval;
+var backupInterval = config.server.backupInterval;
 
 /** set-up the server **/
 var app = connect.createServer(
@@ -40,9 +36,7 @@ console.info('Listening on port: `' + PORT + '`');
 /** end server set-up **/
 
 // config app logic
-var layout = new Layout({
-  map: config.map
-});
+var layout = new Layout(config.layout);
 
 if (fs.existsSync(lastStatePath)) {
   try {

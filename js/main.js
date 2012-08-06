@@ -1,5 +1,7 @@
 
-var socket = io.connect('http://localhost');
+var socket = io.connect(config.client.serverAddress ||
+                        window.location.protocol +'//'+ window.location.hostname
+);
 var layout;
 var typeList;
 var menu;
