@@ -1,5 +1,7 @@
 /backup
 /node_modules
 
+/js/config.js
+
 .DS_Store
 npm-debug.log
