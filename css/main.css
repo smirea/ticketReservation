@@ -80,17 +80,17 @@
 
 .collapsible-button {
   position: absolute;
-  top: 3px;
-  right: 3px;
+  top: 1px;
+  right: 1px;
   display: inline-block;
   border: 1px solid #ccc;
   background: #eee;
-  width: 16px;
-  height: 16px;
+  padding: 1px 4px;
   font-family: monospace, courier, sans-serif, verdana, arial;
   font-size: 9pt;
   font-weight: bold;
-  line-height: 16px;
+  text-align: center;
+  text-decoration: none;
   color: #333;
 }
 .collapsible-button:hover {
