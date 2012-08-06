@@ -6,6 +6,7 @@ var layout;
 var typeList;
 var menu;
 var $layoutWrapper;
+var reservations = [];
 
 if (typeof String.prototype.trim !== 'function') {
   String.prototype.trim = function _trim () {
@@ -171,7 +172,10 @@ function setupMenu () {
             if (error) {
               statusUpdate(error, 'error');
             } else {
-              reserveSeats(Object.keys(result.codes));
+              var reservationObject = Object.create(result);
+              delete reservationObject.codes;
+              reservationObject.seats = Object.keys(result.codes);
+              reserveSeats(reservationObject);
               var codes = [];
               for (var seat in result.codes) {
                 codes.push(
@@ -207,10 +211,15 @@ function setupMenu () {
 
 function setupSocket () {
   socket.on('loadState', function _onLoadState (state) {
+    delete state.map;
     layout.loadState(state);
     $layoutWrapper.empty();
     $layoutWrapper.html(layout.toElement());
+    for (var i=0; i<state.reservations.length; ++i) {
+      reserveSeats(state.reservations[i]);
+    }
     selection = {};
+    reservations = [];
     addEvents(layout);
   })
   .on('reserve', reserveSeats)
@@ -229,14 +238,27 @@ function setupSocket () {
   });
 }
 
-function reserveSeats (seats) {
-  if (seats.length === 0) {
-    return;
-  }
-  for (var i=0; i<seats.length; ++i) {
-    var arr = seats[i].split('-');
-    layout.reserve(arr[0], arr[1]);
-    delete selection[layout.makeID(arr[0], arr[1])];
+function reserveSeats (reservationObject) {
+  if (reservations[reservationObject.number]){
+    var existing = reservations[reservationObject.number];
+    statusUpdate('Invalid reservation number',
+                    'A reservation with the number `' + existing.number + '` ' +
+                    'already exists for `' + existing.name + '` ' +
+                    ' ('+existing.email+') with the following seats: ' +
+                    existing.seats.join(','),
+                  'error'
+    );
+  } else if (reservationObject.seats.length === 0) {
+    statusUpdate('Empty reservation', null, 'error');
+  } else {
+    for (var i=0; i<reservationObject.seats.length; ++i) {
+      var arr = reservationObject.seats[i].split('-');
+      var id = layout.makeID(arr[0], arr[1]);
+      layout.reserve(arr[0], arr[1]);
+      $('#'+id).attr('reservation-number', reservationObject.number);
+      delete selection[id];
+    }
+    reservations[reservationObject.number] = reservationObject;
   }
 }
 

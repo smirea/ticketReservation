@@ -28,6 +28,14 @@ io.sockets.on('connection', function (socket) {
   setupSocket(socket);
   var stateObject = getStateObject();
   delete stateObject.codes;
+  delete stateObject.reservations;
+  stateObject.reservations = [];
+  for (var i=0; i<reservations.length; ++i) {
+    var newReservation = cloneObject(reservations[i]);
+    newReservation.seats = Object.keys(newReservation.codes);
+    delete newReservation.codes;
+    stateObject.reservations[i] = newReservation;
+  }
   socket.emit('loadState', stateObject);
 });
 
@@ -49,6 +57,7 @@ if (fs.existsSync(lastStatePath)) {
         }
       }
     }
+    reservations = stateObject.reservations;
     layout.loadState(stateObject);
     console.info('[INFO] Successfully loaded old state');
   } catch (exception) {
@@ -137,7 +146,10 @@ function setupSocket (socket) {
       };
       reservations.push(reservationObject);
       callback(reservationObject);
-      socket.broadcast.emit('reserve', seats);
+      var publicReservationObject = cloneObject(reservationObject);
+      delete publicReservationObject.codes;
+      publicReservationObject.seats = seats;
+      socket.broadcast.emit('reserve', publicReservationObject);
     } else if (!error) {
       error = 'Something went wrong, seats not reserved!';
     }
@@ -166,4 +178,25 @@ function setupSocket (socket) {
   .on('disconnect', function _onDisconnect (data) {
     console.info('[SOCKET] Disconnected:' + socket.id);
   });
+}
+
+/**
+ * Clones an Array or an Object literal
+ */
+function cloneObject (object) {
+  var newObject = null;
+  if (typeof object === 'object') {
+    if (object.constructor === Object) {
+      newObject = {};
+      for (var key in object) {
+        newObject[key] = object[key];
+      }
+    } else if (object.constructor === Array) {
+      newObject = [];
+      for (var i=0; i<object.length; ++i) {
+        newObject[i] = object[i];
+      }
+    }
+  }
+  return newObject || object;
 }
