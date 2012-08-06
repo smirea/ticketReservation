@@ -7,7 +7,22 @@ var typeList;
 var menu;
 var $layoutWrapper;
 
-(function _main () {
+(function _main ($, undefined) {
+  $.fn.disableSelection = function () {
+    return this.each(function () {
+      $(this)
+        .attr('unselectable', 'on')
+        .css({
+          '-moz-user-select':'none',
+          '-webkit-user-select':'none',
+          'user-select':'none',
+          '-ms-user-select':'none'
+        })
+        .each(function () {
+          this.onselectstart = function() { return false; };
+        });
+    });
+  };
 
   var classes = {
     selected: 'selected'
@@ -132,6 +147,7 @@ var $layoutWrapper;
   function addEvents (layout) {
     var components = layout.getComponents();
     var $seats = layout.toElement().find('.'+layout.classes.seat);
+    layout.toElement().disableSelection();
     $seats
       .on('click.lock', function _selectSeat () {
         var id = $(this).attr('id');
@@ -158,4 +174,5 @@ var $layoutWrapper;
   function jqElement (type) {
     return $(document.createElement(type));
   }
-}());
+
+}(jQuery));
