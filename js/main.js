@@ -30,6 +30,53 @@ if (typeof String.prototype.trim !== 'function') {
     });
   };
 
+  $.fn.collapsible = function (_options) {
+    var options = $.extend({
+      // if set to a selector and if any children mathching the selector are
+      //  found than they will be used as the toggleable container
+      target: null
+    }, _options);
+    return this.each(function () {
+      var button = $(document.createElement('a'));
+      var parent = $(this);
+      var target = options.target ? $(this).find(options.targetChild) : null;
+
+      if (!target || !target.length) {
+        $(this).wrap('<div />');
+        parent = $(this).parent();
+        target = $(this);
+      }
+
+      if (parent.css('position') == 'static') {
+        parent.css('position', 'relative');
+      }
+
+      button
+        .data('parent', parent)
+        .data('target', target)
+        .attr({
+          href: 'javascript:void(0)',
+          'class': 'collapsible-button'
+        })
+        .on('click', function _toggle (event) {
+          event.preventDefault();
+          if (target.is(':visible')){
+            button.html('+');
+            target.hide();
+          } else {
+            button.html('-');
+            target.show();
+          }
+        });
+
+      target.addClass('collapsible-target');
+
+      parent
+        .addClass('collapsible-parent')
+        .append(button);
+    });
+  }
+
   var classes = {
     selected: 'selected'
   };
@@ -107,13 +154,13 @@ if (typeof String.prototype.trim !== 'function') {
         var emailRegExp = /^[a-zA-Z0-9\-_.]+@[a-zA-Z0-9\-_]+\.[a-z]{2,3}$/;
 
         if (Object.keys(selection).length === 0) {
-          statusUpdate('No seats selected!', 'error');
+          statusUpdate('No seats selected!', null, 'error');
         } else if (!name || name.length < 4) {
           menu.reserve.name.focus();
-          statusUpdate('Name must have at least 4 characters', 'error');
+          statusUpdate('Name must have at least 4 characters', null, 'error');
         } else if (!email || !emailRegExp.test(email)) {
           menu.reserve.email.focus();
-          statusUpdate('Invalid email', 'error');
+          statusUpdate('Invalid email', null, 'error');
         } else {
           var seats = Object.keys(selection).map(function _removePrefix (r) {
             return r.slice(layout.options.seatSeparator.length +
@@ -134,7 +181,7 @@ if (typeof String.prototype.trim !== 'function') {
                     '</tr>'
                   );
                 };
-                statusUpdate('Reservation complete! ' +
+                statusUpdate('Reservation complete! ',
                               '<div><b>number:</b> ' + result.number + '</div>'+
                               '<div><b>name:</b> ' + result.name + '</div>' +
                               '<div><b>email:</b> ' + result.email + '</div>' +
@@ -171,8 +218,8 @@ if (typeof String.prototype.trim !== 'function') {
       var oldType = layout.getType(row, column);
       layout.setType(row, column, type);
     })
-    .on('statusUpdate', function _statusUpdate (content, type) {
-      statusUpdate(content, type);
+    .on('statusUpdate', function _statusUpdate (title, content, type) {
+      statusUpdate(title, content, type);
     })
     .on('connect', function _onConnect () {
       console.info('[SOCKET] Connected');
@@ -193,13 +240,25 @@ if (typeof String.prototype.trim !== 'function') {
     }
   }
 
-  function statusUpdate (content, type) {
+  function statusUpdate (title, content, type) {
     type = type || 'log';
+    var li = jqElement('li');
     menu.status.append(
-      jqElement('li')
-        .attr('class', type)
-        .append(content)
+      li.attr('class', type)
+        .append(
+          jqElement('div')
+            .addClass('title')
+            .html(title)
+        )
     );
+    if (content) {
+      li.append(
+        jqElement('div')
+          .addClass('content')
+          .html(content)
+      );
+      li.collapsible({target:'.content'});
+    }
     menu.status[0].scrollTop = menu.status[0].scrollHeight;
   }
 

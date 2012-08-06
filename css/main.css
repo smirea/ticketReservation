@@ -69,6 +69,32 @@
   list-style-type: none;
   overflow: auto;
 }
+#menu #status li {
+  border-bottom: 1px solid #ccc;
+  margin: 2px 3px;
+  padding: 2px;
+}
 #menu #reserve{
 
+}
+
+.collapsible-button {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: inline-block;
+  border: 1px solid #ccc;
+  background: #eee;
+  width: 16px;
+  height: 16px;
+  font-family: monospace, courier, sans-serif, verdana, arial;
+  font-size: 9pt;
+  font-weight: bold;
+  line-height: 16px;
+  color: #333;
+}
+.collapsible-button:hover {
+  border-color: #b50;
+  background: #fca;
+  color: #b50;
 }
