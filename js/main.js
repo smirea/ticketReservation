@@ -90,9 +90,6 @@ var classes = {
   selected: 'selected'
 };
 
-var selection = {};
-
-
 // init socket
 setupSocket();
 
@@ -101,7 +98,8 @@ $(function _initializeLayout () {
   layout = new LayoutView({
     showLabels: true,
     spaces: ['E-F', 'M-N'],
-    map: config.map
+    map: config.map,
+    socket: socket
   });
   typeList = Object.keys(layout.TYPES);
   typeList.unshift(0);
@@ -162,7 +160,7 @@ function setupMenu () {
       var email = menu.reserve.email.val().trim();
       var emailRegExp = /^[a-zA-Z0-9\-_.]+@[a-zA-Z0-9\-_]+\.[a-z]{2,3}$/;
 
-      if (Object.keys(selection).length === 0) {
+      if (Object.keys(layout.locks).length === 0) {
         statusUpdate('No seats selected!', null, 'error');
       } else if (!name || name.length < 4) {
         menu.reserve.name.focus();
@@ -171,25 +169,24 @@ function setupMenu () {
         menu.reserve.email.focus();
         statusUpdate('Invalid email', null, 'error');
       } else {
-        var seats = Object.keys(selection).map(function _removePrefix (r) {
-          return r.slice(layout.options.seatSeparator.length +
-                          layout.options.seatPrefix.length);
-        });
-        if (confirm('Reserving the following seats: '+seats.join(', '))) {
-          socket.emit('reserve', name, email, seats, function (result, error){
+        var seats = Object.keys(layout.locks);
+        if (confirm('Reserving the following seats: ' + seats.join(', '))) {
+          socket.emit('reserve', name, email, seats, function (result, error) {
             if (error) {
               statusUpdate(error, 'error');
             } else {
+              var seats = Object.keys(result.codes);
               var reservationObject = $.extend({}, result);
               delete reservationObject.codes;
-              reservationObject.seats = Object.keys(result.codes);
-              reserveSeats(reservationObject);
+              reservationObject.seats = seats;
+              registerReservation(reservationObject);
+              seats.sort();
               var codes = [];
-              for (var seat in result.codes) {
+              for (var i=0; i<seats.length; ++i) {
                 codes.push(
                   '<tr>' +
-                    '<td><b>'+ seat +':</b></td>'+
-                    '<td> ' + result.codes[seat] + '</td>' +
+                    '<td><b>'+ seats[i] +':</b></td>'+
+                    '<td> ' + result.codes[seats[i]] + '</td>' +
                   '</tr>'
                 );
               };
@@ -221,19 +218,31 @@ function setupSocket () {
   socket.on('loadState', function _onLoadState (state) {
     delete state.map;
     layout.loadState(state);
-    $layoutWrapper.empty();
-    $layoutWrapper.html(layout.toElement());
+    $layoutWrapper
+      .empty()
+      .html(layout.toElement());
     reservations = [];
     for (var i=0; i<state.reservations.length; ++i) {
-      reserveSeats(state.reservations[i]);
+      registerReservation(state.reservations[i]);
     }
-    selection = {};
+    for (var seatID in state.locks) {
+      var arr = seatID.split('-');
+      if (layout.getType(arr[0], arr[1]) === layout.TYPES.EMPTY) {
+        if (state.locks[seatID] === socket.id) {
+          layout.lock(arr[0], arr[1]);
+        } else {
+          layout.outerLock(arr[0], arr[1], state.locks[seatID]);
+        }
+      }
+    }
     addEvents(layout);
   })
-  .on('reserve', reserveSeats)
-  .on('setType', function _onSetType (row, column, type) {
-    var oldType = layout.getType(row, column);
-    layout.setType(row, column, type);
+  .on('reservation', registerReservation)
+  .on('lock', function _onLock (row, column, socketID) {
+    layout.outerLock(row, column, socketID);
+  })
+  .on('unlock', function _onUnlock(row, column) {
+    layout.outerUnlock(row, column);
   })
   .on('statusUpdate', function _statusUpdate (title, content, type) {
     statusUpdate(title, content, type);
@@ -258,7 +267,7 @@ function setupSocket () {
   });
 }
 
-function reserveSeats (reservationObject) {
+function registerReservation (reservationObject) {
   if (reservations[reservationObject.number]){
     var existing = reservations[reservationObject.number];
     statusUpdate('Invalid reservation number',
@@ -273,10 +282,10 @@ function reserveSeats (reservationObject) {
   } else {
     for (var i=0; i<reservationObject.seats.length; ++i) {
       var arr = reservationObject.seats[i].split('-');
-      var id = layout.makeID(arr[0], arr[1]);
+      layout.makeEmpty(arr[0], arr[1]);
       layout.reserve(arr[0], arr[1]);
-      $('#'+id).attr('reservation-number', reservationObject.number);
-      delete selection[id];
+      layout.getCell(arr[0], arr[1])
+        .attr('reservation-number', reservationObject.number);
     }
     reservations[reservationObject.number] = reservationObject;
   }
@@ -319,54 +328,69 @@ var highlightSeats = (function () {
 function addEvents (layout) {
   var components = layout.getComponents();
   var $seats = layout.toElement().find('.'+layout.classes.seat);
-  var $message = $(document.createElement('div'));
+  var $message = jqElement('div');
   $message
     .addClass('reservation-message')
     .hide()
     .appendTo(document.documentElement);
   layout
     .toElement()
-    .disableSelection();
-  $seats
-    .on('mouseenter.selectReservation', function _onMouseEnter () {
-      var number = $(this).attr('reservation-number');
-      if (number !== undefined) {
-        number = parseInt(number, 10);
-        var reserv = reservations[number];
-        highlightSeats($seats.filter('[reservation-number="'+number+'"]'));
-        $message
-          .show()
-          .html(
-            '<table>' +
-              '<tr><td><b>Number: </b></td><td>' + reserv.number + '</td></tr>'+
-              '<tr><td><b>Name: </b></td><td>' + reserv.name + '</td></tr>' +
-              '<tr><td><b>Email: </b></td><td>' + reserv.email + '</td></tr>' +
-            '</table>'
-          )
-      }
+    .disableSelection()
+    .on('mouseenter.outerLock', '[outer-lock]', function () {
+      var outerLock = $(this).attr('outer-lock');
+      highlightSeats($seats.filter('[outer-lock="' + outerLock + '"]'));
+      $message.show().html('Locked by `' + outerLock + '`');
     })
-    .on('mouseleave.selectReservation', function _onMouseLeave () {
+    .on('mouseleave.outerLock', '[outer-lock]', function () {
       highlightSeats();
       $message.hide();
     })
+    .on('mouseenter.selectReservation', '[reservation-number]', function () {
+      var number = $(this).attr('reservation-number');
+      number = parseInt(number, 10);
+      var reserv = reservations[number];
+      highlightSeats($seats.filter('[reservation-number="'+number+'"]'));
+      $message
+        .show()
+        .html(
+          '<table>' +
+            '<tr><td><b>Number: </b></td><td>' + reserv.number + '</td></tr>' +
+            '<tr><td><b>Name: </b></td><td>' + reserv.name + '</td></tr>' +
+            '<tr><td><b>Email: </b></td><td>' + reserv.email + '</td></tr>' +
+          '</table>'
+        )
+    })
+    .on('mouseleave.selectReservation', '[reservation-number]', function () {
+      highlightSeats();
+      $message.hide();
+    });
+
+  $seats
     .on('click.lock', function _selectSeat () {
       var id = $(this).attr('id');
       var arr = id.split('-');
-      var row = arr[1];
-      var column = arr[2];
-      if (layout.getType(row, column) === layout.TYPES.EMPTY) {
-        selection[id] = true;
-        layout.lock(row, column, function _onConflict (newType) {
-          delete selection[id];
-          statusUpdate('Could not lock seat `' + row + '-' + column +
-                        '`. It is `' + layout.getEnumName(newType) + '`'
-          );
-        });
-      } else if (layout.getType(row, column) === layout.TYPES.LOCKED) {
-        delete selection[id];
-        layout.unlock(row, column, true);
-      } else {
-        //console.warn('[addEvents] This is bad', this.id, arguments);
+      var row = arr[0];
+      var column = arr[1];
+      switch (layout.getType(row, column)) {
+        case layout.TYPES.EMPTY:
+          layout.lock(row, column, function _onConflict (error, newType) {
+            layout.unlock(row, column);
+            statusUpdate( 'Could not lock seat `' + id + '`',
+                          'It is `' + layout.getEnumName(newType) + '`.<br />' +
+                            error +
+                            ' <b>You should refresh the page ...</b>'
+            );
+          });
+          break;
+        case layout.TYPES.LOCKED:
+          if (layout.locks[id]) {
+            layout.unlock(row, column, true);
+          } else {
+            statusUpdate('The seat `' + id + '` is locked by somebody else');
+          }
+          break;
+        default:
+          // Do nothing
       }
       menu.reserve.name.focus();
     });

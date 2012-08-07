@@ -15,7 +15,6 @@ var saveInterval = config.server.saveInterval;
 var backupInterval = config.server.backupInterval;
 
 var reservations = [];
-var locks = {};
 
 // the server's session
 var session = Math.floor(Math.random() * 100000000);
@@ -95,7 +94,10 @@ function saveStatus () {
   if (lastSave.getTime() + backupInterval < now.getTime()) {
     lastSave = now;
   }
-  var content = JSON.stringify(getStateObject(), undefined, 2);
+  var stateObject = getStateObject();
+  // remove all temporary locks
+  delete stateObject.locks;
+  var content = JSON.stringify(stateObject, undefined, 2);
   var dynamicPath = backupFilePath(lastSave);
   fs.writeFile(lastStatePath, content, function _saveComplete (err) {
     if (err) {
@@ -118,6 +120,7 @@ function backupFilePath (date) {
 function getStateObject () {
   return {
     reservations: reservations,
+    locks: layout.locks,
     options: layout.options,
     TYPES: layout.TYPES,
     map: layout.getComponents().map,
@@ -162,47 +165,46 @@ function setupSocket (socket) {
       var publicReservationObject = cloneObject(reservationObject);
       delete publicReservationObject.codes;
       publicReservationObject.seats = seats;
-      socket.broadcast.emit('reserve', publicReservationObject);
+      socket.broadcast.emit('reservation', publicReservationObject);
     } else if (!error) {
       error = 'Something went wrong, seats not reserved!';
     }
 
     callback(null, error);
   })
-  .on('setType', function _onSetType (row, column, type, errorCallback) {
-    var oldType = layout.getType(row, column);
-    var error = null;
-    var seatID = row + '-' + column;
-
-    switch (type) {
-      case layout.TYPES.LOCKED:
-        if (oldType===layout.TYPES.LOCKED || oldType===layout.TYPES.RESERVED) {
-          error = 'Could not lock the seat as it is `' +
-                    layout.getEnumName(oldType) + '`';
-        } else {
-          locks[seatID] = socket.id;
-        }
-        break;
-      case layout.TYPES.RESERVED:
-        if (oldType !== layout.TYPES.LOCKED || locks[seatID] !== socket.id) {
-          error = 'You do not have a lock on the seat';
-        }
-        break;
-    }
-
-    if (!error && layout.setType(row, column, type)) {
-      socket.broadcast.emit('setType', row, column, type);
+  .on('lock', function _onLock (row, column, errorCallback) {
+    if (layout.lock(row, column, socket.id)) {
+      socket.broadcast.emit('lock', row, column, socket.id);
     } else {
-      if (typeof errorCallback === 'function') {
-        errorCallback(error, oldType);
-      }
-      socket.emit('setType', row, column, oldType);
+      var oldType = layout.getType(row, column);
+      errorCallback('Could not lock seat `' + layout.makeID(row, column) +
+                      '` as it is `' + oldType + '`',
+                    oldType
+      );
+    }
+  })
+  .on('unlock', function _onUnlock (row, column, errorCallback) {
+    if (layout.unlock(row, column)) {
+      socket.broadcast.emit('unlock', row, column);
+    } else {
+      var oldType = layout.getType(row, column);
+      errorCallback('Could not unlock seat `' + layout.makeID(row, column) +
+                      '` as it is `' + oldType + '`',
+                    oldType
+      );
     }
   })
   .on('echo', function _onEcho (data) {
     socket.emit('echo', 'ECHO: ' + data);
   })
   .on('disconnect', function _onDisconnect (data) {
+    for (var seatID in layout.locks) {
+      if (layout.locks[seatID] === socket.id) {
+        var arr = seatID.split('-');
+        layout.unlock(arr[0], arr[1]);
+        socket.broadcast.emit('unlock', arr[0], arr[1]);
+      }
+    }
     console.info('[SOCKET] Disconnected:' + socket.id);
   });
 }

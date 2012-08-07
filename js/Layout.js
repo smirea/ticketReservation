@@ -3,6 +3,8 @@ var Layout = (function _Layout () {
   return Class.extend({
     options: {
       map: {},
+      // used in seatID - Row and column will be separated with
+      seatSeparator: '-',
       codeLength: 6,
       codeChars: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
     },
@@ -13,6 +15,14 @@ var Layout = (function _Layout () {
      * RESERVED - seat is reserved
      */
     TYPES: makeEnum('BLANK EMPTY LOCKED RESERVED'),
+    /**
+     * Holds all the locks obtained by this instance
+     */
+    locks: {},
+    /**
+     * Constructor
+     * @param {Object} _options See Layout.options for defaults
+     */
     init: function Layout (_options) {
       var that = this;
 
@@ -48,6 +58,7 @@ var Layout = (function _Layout () {
         }
       }
       that.TYPES = setup.TYPES || that.TYPES;
+      that.locks = {};
       that.getComponents().codes = setup.codes || that.getComponents().codes;
       if (setup.map) {
         that.getComponents().map = setup.map;
@@ -66,10 +77,15 @@ var Layout = (function _Layout () {
      * Changes the type of the field. Shorthand for setType(...)
      * @param {String} row
      * @param {String} column
+     * @param {Anything} value=true
      * @returns {Enum Layout.TYPES} The old type on success or NULL on error
      */
-    lock: function _lock (row, column) {
-      return this.setType(row, column, this.TYPES.LOCKED);
+    lock: function _lock (row, column, value) {
+      if (this.getType(row, column) === this.TYPES.EMPTY) {
+        this.locks[this.makeID(row, column)] = value || true;
+        return this.setType(row, column, this.TYPES.LOCKED);
+      }
+      return null;
     },
     /**
      * Changes the type of the field only if it is locked.
@@ -80,7 +96,8 @@ var Layout = (function _Layout () {
      */
     unlock: function _unlock (row, column) {
       if (this.getType(row, column) === this.TYPES.LOCKED) {
-        return this.makeEmpty(row, column);
+        delete this.locks[this.makeID(row, column)];
+        return this.setType(row, column, this.TYPES.EMPTY);
       }
       console.warn('[Layout.unlock] Seat `'+row+'-'+column+'` is not locked!');
       return null;
@@ -114,6 +131,7 @@ var Layout = (function _Layout () {
         if (oldType === this.TYPES.LOCKED) {
           this.unlock(row, column);
         } else if (oldType === this.TYPES.RESERVED) {
+          console.trace();
           console.warn('[Layout.makeEmpty] Cannot make empty a reserved field');
         }
         return oldType;
@@ -141,13 +159,13 @@ var Layout = (function _Layout () {
         console.warn('[Layout.setType] Invalid indexes: ', row, column);
         return null;
       } else {
+        var oldType = that.getType(row, column);
         if (type === that.TYPES.BLANK) {
           console.warn('[Layout.setType] WARNING: changing type into BLANK');
         }
-        if (map[row][column] === that.TYPES.BLANK) {
+        if (oldType === that.TYPES.BLANK) {
           console.warn('[Layout.setType] WARNING: changing type from BLANK');
         }
-        var oldType = map[row][column];
         map[row][column] = type;
         return oldType;
       }
@@ -166,6 +184,17 @@ var Layout = (function _Layout () {
         return null;
       }
       return map[row][column];
+    },
+    /**
+     * Returns the id of the seat at a specific position.
+     * NOTE: Does not check if the seat actually exists!
+     * @param {String} row
+     * @param {String} column
+     * @returns {String}
+     */
+    makeID: function _makeID (row, column) {
+      var opt = this.options;
+      return row + opt.seatSeparator + column;
     },
     /**
      * Get the name of an enum made with Layout-makeEnum

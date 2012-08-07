@@ -1,16 +1,19 @@
 var LayoutView = (function _LayoutView ($) {
 
   return Layout.extend({
+    socket: null,
     options: {
+      // The row names
       showLabels: true,
-      spaces: [],
-      seatPrefix: 'cell',
-      seatSeparator: '-'
+      // Socket.io socket for connections
+      socket: null
     },
     classes: {
       seat: 'seat',
       hovered: 'hovered',
       marked: 'marked',
+      reserved: 'reserved',
+      locked: 'locked',
       rowName: 'row-name',
       empty: 'empty',
       blank: 'blank'
@@ -24,9 +27,15 @@ var LayoutView = (function _LayoutView ($) {
 
       var components = $.extend(that.getComponents(), {
         maxColumns: 0,
-        table: null,
-        spaces: that.options.spaces.map(function (r) { return r.split('-'); })
+        table: null
       });
+
+      if (!that.options.socket) {
+        console.warn('[LayoutView.init] No socket specificed');
+        return null;
+      }
+
+      that.socket = that.options.socket;
 
       // create the DOM elements
       createTable(that);
@@ -67,17 +76,6 @@ var LayoutView = (function _LayoutView ($) {
       }
     },
     /**
-     * Returns the id of the seat at a specific position.
-     * NOTE: Does not check if the seat actually exists!
-     * @param {String} row
-     * @param {String} column
-     * @returns {String}
-     */
-    makeID: function _makeID (row, column) {
-      var opt = this.options;
-      return [opt.seatPrefix, row, column].join(opt.seatSeparator);
-    },
-    /**
      * Returns the jQuery element at the given position
      * @param {String} row
      * @param {String} column
@@ -94,55 +92,150 @@ var LayoutView = (function _LayoutView ($) {
      * Changes the type of the field
      * @param {String} row
      * @param {String} column
-     * @param {Function} asyncCallback If not null, the method checks the result
-     *    with the server and updates the fields upon conflict
+     * @param {Function} async If not null, the method checks the result
+     *    with the server and runs the async callback on error
      * @returns {Enum Layout.TYPES} The old type on success or NULL on error
      */
-    lock: function _lock (row, column, asyncCallback) {
-      var method = asyncCallback ? 'setTypeAsync' : 'setType';
-      return this[method](row, column, this.TYPES.LOCKED, asyncCallback);
+    lock: function _lock (row, column, async) {
+      var that = this;
+      var seatID = that.makeID(row, column);
+      if (that.getType(row, column) === that.TYPES.EMPTY) {
+        that.locks[seatID] = true;
+        this.getCell(row, column).addClass(this.classes.locked);
+        if (async) {
+          async = typeof async === 'function' ? async : function (err, newType){
+            that.unlock(row, column);
+            console.warn('[Layout.lock(async)] Server conflict: `' +
+                          layout.getEnumName(newType) +
+                          '`. <br />' + err
+            );
+          };
+          var oldType = that._super(row, column);
+          if (oldType) {
+            that.socket.emit('lock', row, column, async);
+          }
+          return oldType;
+        } else {
+          that.makeEmpty(row, column);
+          return that.setType(row, column, that.TYPES.LOCKED);
+        }
+      }
+      console.warn('[LayoutView.lock] Seat `' + seatID + '` not empty!');
+      return null;
     },
     /**
      * Changes the type of the field to empty only if it is locked.
      * @param {String} row
      * @param {String} column
-     * @param {Function} asyncCallback If not null, the method checks the result
+     * @param {Function} async If not null, the method checks the result
      *    with the server and updates the fields upon conflict
      * @returns {Enum Layout.TYPES} The old type on success or NULL on error
      */
-    unlock: function _unlock (row, column, asyncCallback) {
-      if (this.getType(row, column) === this.TYPES.LOCKED) {
-        return this.makeEmpty(row, column, asyncCallback);
+    unlock: function _unlock (row, column, async) {
+      var that = this;
+      var seatID = that.makeID(row, column);
+      if (that.getType(row, column) === that.TYPES.LOCKED) {
+        if (that.locks[seatID]) {
+          delete that.locks[seatID];
+          this.getCell(row, column).removeClass(this.classes.locked);
+          if (async) {
+            async = typeof async==='function' ? async : function (err, newType){
+              console.warn('[Layout.unlock(async)] Server conflict: `' +
+                            layout.getEnumName(newType) +
+                            '`. <br />' + err
+              );
+            };
+            var oldType = that._super(row, column);
+            if (oldType) {
+              that.socket.emit('unlock', row, column, async);
+            }
+            return oldType;
+          } else {
+            return that.setType(row, column, that.TYPES.EMPTY);
+          }
+        } else {
+          console.warn('[LayoutView.unlock] Lock on `' + seatID +
+                        '` not set by this instance');
+        }
       }
-      console.warn('[LayoutView.unlock] Seat `'+row+'-'+column+'` not locked!');
+      console.warn('[LayoutView.unlock] Seat `' + seatID + '` not locked!');
+      return null;
+    },
+    /**
+     * Sets the type of the field to TYPES.LOCKED without sanity checks
+     *  Used to signal other instances' locking
+     * @param {String} row
+     * @param {String} column
+     * @param {String} name
+     * @returns {Enum Layout.TYPES} The old type on success or NULL on error
+     */
+    outerLock: function _outerLock (row, column, name) {
+      this.getCell(row, column)
+        .attr('outer-lock', name)
+        .addClass(this.classes.locked);
+      this.makeEmpty(row, column);
+      return this.setType(row, column, this.TYPES.LOCKED);
+    },
+    /**
+     * Changes the type of the field to empty only if locked with outerLock
+     *  Similar to LayoutView.unlock
+     * @param {String} row
+     * @param {String} column
+     * @returns {Enum Layout.TYPES} The old type on success or NULL on error
+     */
+    outerUnlock: function _outerUnlock (row, column) {
+      var seatID = this.makeID(row, column);
+      if (this.getType(row, column) === this.TYPES.LOCKED) {
+        if (!this.locks[seatID]) {
+          this.getCell(row, column)
+            .removeAttr('outer-lock')
+            .removeClass(this.classes.locked);
+          return this.setType(row, column, this.TYPES.EMPTY);
+        } else {
+          console.warn('[LayoutView.outerUnlock] `' + seatID + '` locked with' +
+                        ' LayoutView.lock. Use LayoutView.unlock for it');
+        }
+      }
+      console.warn('[LayoutView.outerUnlock] Seat `' + seatID + '` not locked');
       return null;
     },
     /**
      * Changes the type of the field. Shorthand for setType(...)
      * @param {String} row
      * @param {String} column
-     * @param {Function} asyncCallback If not null, the method checks the result
-     *    with the server and updates the fields upon conflict
      * @returns {Enum Layout.TYPES} The old type on success or NULL on error
      */
-    reserve: function _reserve (row, column, asyncCallback) {
-      var method = asyncCallback ? 'setTypeAsync' : 'setType';
-      return this[method](row, column, this.TYPES.RESERVED, asyncCallback);
+    reserve: function _reserve (row, column) {
+      this.makeEmpty(row, column);
+      this.getCell(row, column).addClass(this.classes.reserved);
+      this.makeEmpty(row, column);
+      return this.setType(row, column, this.TYPES.RESERVED);
     },
     /**
-     * Changes the type of the field. Shorthand for setType(...)
+     * Applies all undo methods until the field has the thype TYPES.EMPTY
      * @param {String} row
      * @param {String} column
-     * @param {Function} asyncCallback If not null, the method checks the result
+     * @param {Function} async If not null, the method checks the result
      *    with the server and updates the fields upon conflict
      * @returns {Enum Layout.TYPES} The old type on success or NULL on error
      */
-    makeEmpty: function _makeEmpty (row, column, asyncCallback) {
-      var method = asyncCallback ? 'setTypeAsync' : 'setType';
-      return this[method](row, column, this.TYPES.EMPTY, asyncCallback);
+    makeEmpty: function _makeEmpty (row, column, async) {
+      var oldType = this.getType(row, column);
+      var skip = false;
+
+      // if it an outer-lock
+      if (oldType===this.TYPES.LOCKED && !this.locks[this.makeID(row, column)]){
+        oldType = this.outerUnlock(row, column);
+        skip = true;
+      }
+      this._super(row, column);
+
+      return skip ? oldType :
+                    this.setType(row, column, this.TYPES.EMPTY);
     },
     /**
-     * Change the type of a cell in the map
+     * Change the type of a cell in the map.
+     *  NOTE: This should really not be used externally
      * @param {String} row
      * @param {String} column
      * @param {Enum Layout.TYPES|Int} type
@@ -150,45 +243,12 @@ var LayoutView = (function _LayoutView ($) {
      */
     setType: function _setType (row, column, type) {
       var that = this;
-      var oldType = this._super(row, column, type);
-      if (oldType) {
-        var oldClass = that.getEnumName(oldType).toLowerCase();
-        var newClass = that.getEnumName(type).toLowerCase();
-        that.getCell(row, column)
-          .removeClass(oldClass)
-          .addClass(newClass);
-        return oldType;
-      }
+      return this._super(row, column, type);
       return null;
     },
     /**
-     * Change the type of a cell in the map. Checks the result with the server
-     *   and updates the fields upon conflict
-     * @param {String} row
-     * @param {String} column
-     * @param {Enum Layout.TYPES|Int} type
-     * @param {Function} fn Callback to run on error
-     * @returns {Enum Layout.TYPES} The old type on success or NULL on error
+     * @returns The jQuery element representation of the Class
      */
-    setTypeAsync: function _setTypeAsync (row, column, type, fn) {
-      var oldType = this.setType(row, column, type);
-      fn = typeof fn === 'function' ? fn : function _errorCallback (newType) {
-        console.warn('[Layout.setTypeAsync] Server conflict:',
-                      layout.getEnumName(newType)
-        );
-      };
-      if (oldType) {
-        socket.emit('setType', row, column, type, function (error, newType) {
-          if (error) {
-            console.warn('[Layout.setTypeAsync]', error);
-          } else {
-            layout.setType(row, column, newType);
-            fn(newType, oldType, row, column, type);
-          }
-        });
-      }
-      return oldType;
-    },
     toElement: function _toElement () {
       return this.getComponents().table;
     }
