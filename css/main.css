@@ -3,54 +3,59 @@ table {
   font-size: inherit;
   color: inherit;
 }
-#layout table{
+#layout table {
   border: 1px solid #ccc;
   padding: 2px;
 }
-#layout table{
+#layout table {
   border-spacing: 1px;
 }
-#layout td{
+#layout td {
   width: 26px;
   height: 26px;
   line-height: 26px;
   padding: 0;
   text-align: center;
 }
-#layout td.empty{
+#layout td.empty {
   background: #eee;
   cursor: pointer;
 }
-#layout td.hovered{
+#layout td.hovered {
   background: lightgreen;
 }
-#layout td.marked{
+#layout td.marked {
   background: lightblue;
 }
-#layout td.selected{
+#layout td.selected {
   background: crimson!important;
 }
-#layout td.locked{
-  background: #888;
+#layout td.locked:not([outer-lock]) {
+  background: #18f;
   color: #fff;
   cursor: pointer;
 }
-#layout td.reserved{
+#layout td.locked[outer-lock] {
+  background: #666;
+  color: #fff;
+  cursor: default;
+}
+#layout td.reserved {
   background: #fa0;
   color: #fff;
   cursor: pointer;
 }
-#layout td.highlighted{
-  background: crimson;
+#layout td.highlighted {
+  background: crimson!important;
   color: #fff;
   cursor: pointer;
 }
 
-#layout .row-name{
+#layout .row-name {
   background: orange;
 }
 
-#menu{
+#menu {
   float: right;
   border: 1px solid #ccc;
   background: #eaeaea;
@@ -75,7 +80,7 @@ table {
   margin: 3px;
   padding: 2px;
 }
-#menu #status{
+#menu #status {
   max-height: 420px;
   list-style-type: none;
   overflow: auto;
@@ -85,7 +90,7 @@ table {
   margin: 2px 3px;
   padding: 2px;
 }
-#menu #reserve{
+#menu #reserve {
 
 }
 
@@ -113,7 +118,7 @@ table {
   position: fixed;
   z-index: 100000000;
   top: 5px;
-  left: 5px;
+  right: 5px;
   background: rgba(0, 0, 0, 1);
   border-radius: 7px;
   max-width: 240px;
