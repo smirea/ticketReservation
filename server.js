@@ -15,6 +15,7 @@ var saveInterval = config.server.saveInterval;
 var backupInterval = config.server.backupInterval;
 
 var reservations = [];
+var locks = {};
 
 // the server's session
 var session = Math.floor(Math.random() * 100000000);
@@ -170,18 +171,32 @@ function setupSocket (socket) {
   })
   .on('setType', function _onSetType (row, column, type, errorCallback) {
     var oldType = layout.getType(row, column);
-    var ok = true;
-    if (type === layout.TYPES.LOCKED && oldType === layout.TYPES.RESERVED) {
-      ok = false;
+    var error = null;
+    var seatID = row + '-' + column;
+
+    switch (type) {
+      case layout.TYPES.LOCKED:
+        if (oldType===layout.TYPES.LOCKED || oldType===layout.TYPES.RESERVED) {
+          error = 'Could not lock the seat as it is `' +
+                    layout.getEnumName(oldType) + '`';
+        } else {
+          locks[seatID] = socket.id;
+        }
+        break;
+      case layout.TYPES.RESERVED:
+        if (oldType !== layout.TYPES.LOCKED || locks[seatID] !== socket.id) {
+          error = 'You do not have a lock on the seat';
+        }
+        break;
     }
-    if (ok && layout.setType(row, column, type)) {
+
+    if (!error && layout.setType(row, column, type)) {
       socket.broadcast.emit('setType', row, column, type);
     } else {
-      var actualType = layout.getType(row, column);
       if (typeof errorCallback === 'function') {
-        errorCallback(actualType);
+        errorCallback(error, oldType);
       }
-      socket.emit('setType', row, column, actualType);
+      socket.emit('setType', row, column, oldType);
     }
   })
   .on('echo', function _onEcho (data) {

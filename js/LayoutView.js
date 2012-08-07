@@ -177,8 +177,10 @@ var LayoutView = (function _LayoutView ($) {
         );
       };
       if (oldType) {
-        socket.emit('setType', row, column, type, function _rollback (newType) {
-          if (newType !== type) {
+        socket.emit('setType', row, column, type, function (error, newType) {
+          if (error) {
+            console.warn('[Layout.setTypeAsync]', error);
+          } else {
             layout.setType(row, column, newType);
             fn(newType, oldType, row, column, type);
           }
