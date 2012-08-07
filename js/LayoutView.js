@@ -90,7 +90,7 @@ var LayoutView = (function _LayoutView ($) {
       return this.getComponents().table.find('#'+this.makeID(row, column));
     },
     /**
-     * Changes the type of the field. Shorthand for setType(...)
+     * Changes the type of the field
      * @param {String} row
      * @param {String} column
      * @param {Function} asyncCallback If not null, the method checks the result
@@ -103,7 +103,6 @@ var LayoutView = (function _LayoutView ($) {
     },
     /**
      * Changes the type of the field to empty only if it is locked.
-     *  Shorthand for setType(...)
      * @param {String} row
      * @param {String} column
      * @param {Function} asyncCallback If not null, the method checks the result
@@ -152,9 +151,8 @@ var LayoutView = (function _LayoutView ($) {
       var that = this;
       var oldType = this._super(row, column, type);
       if (oldType) {
-        var enumKeys = Object.keys(that.TYPES);
-        var oldClass = enumKeys[oldType-1].toLowerCase();
-        var newClass = enumKeys[type-1].toLowerCase();
+        var oldClass = that.getEnumName(oldType).toLowerCase();
+        var newClass = that.getEnumName(type).toLowerCase();
         that.getCell(row, column)
           .removeClass(oldClass)
           .addClass(newClass);
