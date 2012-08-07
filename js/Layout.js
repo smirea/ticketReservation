@@ -103,13 +103,22 @@ var Layout = (function _Layout () {
       return null;
     },
     /**
-     * Changes the type of the field. Shorthand for setType(...)
+     * Changes the type of the field
      * @param {String} row
      * @param {String} column
      * @returns {Enum Layout.TYPES} The old type on success or NULL on error
      */
     makeEmpty: function _makeEmpty (row, column) {
-      return this.setType(row, column, this.TYPES.EMPTY);
+      var oldType = this.getType(row, column);
+      if (oldType) {
+        if (oldType === this.TYPES.LOCKED) {
+          this.unlock(row, column);
+        } else if (oldType === this.TYPES.RESERVED) {
+          console.warn('[Layout.makeEmpty] Cannot make empty a reserved field');
+        }
+        return oldType;
+      }
+      return null;
     },
     /**
      * Change the type of a cell in the map
