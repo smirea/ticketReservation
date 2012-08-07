@@ -6,6 +6,12 @@ var Layout = (function _Layout () {
       codeLength: 6,
       codeChars: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
     },
+    /**
+     * BLANK - cell does not designate a seat (i.e. empty unusable space in map)
+     * EMPTY - empty seat
+     * LOCKED - only this instance is allowed to perform actions on the seat
+     * RESERVED - seat is reserved
+     */
     TYPES: makeEnum('BLANK EMPTY LOCKED RESERVED'),
     init: function Layout (_options) {
       var that = this;
@@ -44,15 +50,6 @@ var Layout = (function _Layout () {
       that.TYPES = setup.TYPES || that.TYPES;
       that.getComponents().codes = setup.codes || that.getComponents().codes;
       if (setup.map) {
-        /*
-        for (var row in setup.map) {
-          for (var column in setup.map[row]) {
-            if (setup.map[row][column] === that.TYPES.LOCKED) {
-              setup.map[row][column] = that.TYPES.EMPTY;
-            }
-          }
-        }
-        */
         that.getComponents().map = setup.map;
       }
     },
