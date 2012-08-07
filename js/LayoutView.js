@@ -52,7 +52,7 @@ var LayoutView = (function _LayoutView ($) {
                 that.lock(row, column);
                 break;
               case that.TYPES.EMPTY:
-                //that.makeEmpty(row, column);
+                // Do Nothing
                 break;
               case that.TYPES.RESERVED:
                 that.reserve(row, column);
@@ -60,6 +60,7 @@ var LayoutView = (function _LayoutView ($) {
               default:
               case that.TYPES.BLANK:
                 // Do Nothing
+                break;
             }
           }
         }
