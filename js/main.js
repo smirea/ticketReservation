@@ -21,10 +21,10 @@ $.fn.disableSelection = function () {
     $(this)
       .attr('unselectable', 'on')
       .css({
-        '-moz-user-select':'none',
-        '-webkit-user-select':'none',
-        'user-select':'none',
-        '-ms-user-select':'none'
+        '-moz-user-select': 'none',
+        '-webkit-user-select': 'none',
+        'user-select': 'none',
+        '-ms-user-select': 'none'
       })
       .each(function () {
         this.onselectstart = function() { return false; };
@@ -36,12 +36,15 @@ $.fn.collapsible = function (_options) {
   var options = $.extend({
     // if set to a selector and if any children mathching the selector are
     //  found than they will be used as the toggleable container
-    target: null
+    target: null,
+    // the slideToggle speed
+    speed: 400
   }, _options);
   return this.each(function () {
     var button = $(document.createElement('a'));
     var parent = $(this);
     var target = options.target ? $(this).find(options.target) : null;
+    var targetHeight = null;
 
     if (!target || !target.length) {
       $(this).wrap('<div />');
@@ -65,10 +68,12 @@ $.fn.collapsible = function (_options) {
         event.preventDefault();
         if (target.is(':visible')){
           button.html('+');
-          target.hide();
+          target.stop().slideUp(options.speed);
         } else {
           button.html('-');
-          target.show();
+          target.stop().slideDown(options.speed, function _restoreHeight () {
+            target.css('height', targetHeight);
+          });
         }
       });
 
@@ -77,6 +82,7 @@ $.fn.collapsible = function (_options) {
     parent
       .addClass('collapsible-parent')
       .append(button);
+    targetHeight = target.css('height');
   });
 }
 
@@ -174,7 +180,7 @@ function setupMenu () {
             if (error) {
               statusUpdate(error, 'error');
             } else {
-              var reservationObject = Object.create(result);
+              var reservationObject = $.extend({}, result);
               delete reservationObject.codes;
               reservationObject.seats = Object.keys(result.codes);
               reserveSeats(reservationObject);
@@ -217,11 +223,11 @@ function setupSocket () {
     layout.loadState(state);
     $layoutWrapper.empty();
     $layoutWrapper.html(layout.toElement());
+    reservations = [];
     for (var i=0; i<state.reservations.length; ++i) {
       reserveSeats(state.reservations[i]);
     }
     selection = {};
-    reservations = [];
     addEvents(layout);
   })
   .on('reserve', reserveSeats)
@@ -233,7 +239,6 @@ function setupSocket () {
     statusUpdate(title, content, type);
   })
   .on('checkSession', function _onCheckSession (serverSession, callback) {
-    console.log(session, arguments);
     if (session === null) {
       session = serverSession;
       callback(true);
@@ -299,11 +304,51 @@ function statusUpdate (title, content, type) {
   menu.status[0].scrollTop = menu.status[0].scrollHeight;
 }
 
+var highlightSeats = (function () {
+  var $oldSelection = $();
+  return function _highlight ($seats) {
+    $oldSelection.removeClass('highlighted')
+    $oldSelection = $();
+    if ($seats) {
+      $seats.addClass('highlighted');
+      $oldSelection = $seats;
+    }
+  }
+})();
+
 function addEvents (layout) {
   var components = layout.getComponents();
   var $seats = layout.toElement().find('.'+layout.classes.seat);
-  layout.toElement().disableSelection();
+  var $message = $(document.createElement('div'));
+  $message
+    .addClass('reservation-message')
+    .hide()
+    .appendTo(document.documentElement);
+  layout
+    .toElement()
+    .disableSelection();
   $seats
+    .on('mouseenter.selectReservation', function _onMouseEnter () {
+      var number = $(this).attr('reservation-number');
+      if (number !== undefined) {
+        number = parseInt(number, 10);
+        var reserv = reservations[number];
+        highlightSeats($seats.filter('[reservation-number="'+number+'"]'));
+        $message
+          .show()
+          .html(
+            '<table>' +
+              '<tr><td><b>Number: </b></td><td>' + reserv.number + '</td></tr>'+
+              '<tr><td><b>Name: </b></td><td>' + reserv.name + '</td></tr>' +
+              '<tr><td><b>Email: </b></td><td>' + reserv.email + '</td></tr>' +
+            '</table>'
+          )
+      }
+    })
+    .on('mouseleave.selectReservation', function _onMouseLeave () {
+      highlightSeats();
+      $message.hide();
+    })
     .on('click.lock', function _selectSeat () {
       var id = $(this).attr('id');
       var arr = id.split('-');
@@ -321,7 +366,7 @@ function addEvents (layout) {
         delete selection[id];
         layout.unlock(row, column, true);
       } else {
-        console.warn('[addEvents] This is bad', this.id, arguments);
+        //console.warn('[addEvents] This is bad', this.id, arguments);
       }
       menu.reserve.name.focus();
     });

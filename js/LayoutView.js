@@ -192,9 +192,8 @@ var LayoutView = (function _LayoutView ($) {
   });
 
   function bindEvents (that) {
-    that.getComponents()
-      .table
-      .find('.'+that.classes.empty)
+    that.getComponents().table
+      .find('.'+that.classes.seat)
       .on({
         mouseenter: function selectPrevSiblings(){
           $(this)

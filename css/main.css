@@ -1,3 +1,8 @@
+table {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
 #layout table{
   border: 1px solid #ccc;
   padding: 2px;
@@ -35,6 +40,12 @@
   color: #fff;
   cursor: pointer;
 }
+#layout td.highlighted{
+  background: crimson;
+  color: #fff;
+  cursor: pointer;
+}
+
 #layout .row-name{
   background: orange;
 }
@@ -97,4 +108,21 @@
   border-color: #b50;
   background: #fca;
   color: #b50;
+}
+.reservation-message {
+  position: fixed;
+  z-index: 100000000;
+  top: 5px;
+  left: 5px;
+  background: rgba(0, 0, 0, 1);
+  border-radius: 7px;
+  max-width: 240px;
+  padding: 7px;
+  font-family: verdana, arial;
+  font-size: 8pt;
+  overflow: hidden;
+  color: #fff;
+}
+.reservation-message table {
+  color: #fff;
 }
