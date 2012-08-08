@@ -1,81 +1,83 @@
 
-var socket = io.connect(config.client.serverAddress ||
-                        window.location.protocol +'//'+ window.location.hostname
-);
+var socket;
 var layout;
 var $layoutWrapper;
 var session = null;
 var reservations = [];
 
-// init socket
-setupSocket();
-
-// window ready
-$(function _initializeLayout () {
-  layout = new LayoutView({
+var getLayout = function _getLayout () {
+  return layout || new LayoutView({
     showLabels: true,
-    spaces: ['E-F', 'M-N'],
     map: config.map,
     socket: socket
   });
+}
 
-  $layoutWrapper = $('#layout');
-  $layoutWrapper.html(layout.toElement());
-
-  addEvents();
-});
-
-function setupSocket () {
-  socket.on('loadState', function _onLoadState (state) {
-    delete state.map;
-    layout.loadState(state);
-    $layoutWrapper
-      .empty()
-      .html(layout.toElement());
-    reservations = [];
-    for (var i=0; i<state.reservations.length; ++i) {
-      registerReservation(state.reservations[i]);
-    }
-    for (var seatID in state.locks) {
-      var arr = seatID.split('-');
-      if (layout.getType(arr[0], arr[1]) === layout.TYPES.EMPTY) {
-        if (state.locks[seatID] === socket.id) {
-          layout.lock(arr[0], arr[1]);
-        } else {
-          layout.outerLock(arr[0], arr[1], state.locks[seatID]);
-        }
+var onLoadState = function _onLoadState (state) {
+  delete state.map;
+  layout = getLayout();
+  layout.loadState(state);
+  $layoutWrapper
+    .empty()
+    .html(layout.toElement());
+  reservations = [];
+  for (var i=0; i<state.reservations.length; ++i) {
+    registerReservation(state.reservations[i]);
+  }
+  for (var seatID in state.locks) {
+    var arr = seatID.split('-');
+    if (layout.getType(arr[0], arr[1]) === layout.TYPES.EMPTY) {
+      if (state.locks[seatID] === socket.id) {
+        layout.lock(arr[0], arr[1]);
+      } else {
+        layout.outerLock(arr[0], arr[1], state.locks[seatID]);
       }
     }
-    addEvents(layout);
-  })
-  .on('reservation', registerReservation)
-  .on('lock', function _onLock (row, column, socketID) {
-    layout.outerLock(row, column, socketID);
-  })
-  .on('unlock', function _onUnlock(row, column) {
-    layout.outerUnlock(row, column);
-  })
-  .on('statusUpdate', function _statusUpdate (title, content, type) {
-    statusUpdate(title, content, type);
-  })
-  .on('checkSession', function _onCheckSession (serverSession, callback) {
-    if (session === null) {
-      session = serverSession;
+  }
+  addEvents(layout);
+}
+
+// window ready
+$(function _initializeLayout () {
+  $layoutWrapper = $('#layout');
+});
+
+function setupSocket (namespace) {
+  socket = io.connect(config.client.serverAddress ||
+                      window.location.protocol + '//' +
+                      window.location.hostname +
+                      (namespace || '')
+  );
+  socket
+    .on('loadState', onLoadState)
+    .on('reservation', registerReservation)
+    .on('lock', function _onLock (row, column, socketID) {
+      layout.outerLock(row, column, socketID);
+    })
+    .on('unlock', function _onUnlock(row, column) {
+      layout.outerUnlock(row, column);
+    })
+    .on('statusUpdate', function _statusUpdate (title, content, type) {
+      statusUpdate(title, content, type);
+    })
+    .on('checkSession', function _onCheckSession (serverSession, callback) {
+      if (session === null) {
+        session = serverSession;
+        callback(true);
+        return;
+      } else if (session !== serverSession) {
+        callback(false);
+        window.location.reload();
+        return;
+      }
       callback(true);
-      return;
-    } else if (session !== serverSession) {
-      callback(false);
-      window.location.reload();
-      return;
-    }
-    callback(true);
-  })
-  .on('connect', function _onConnect () {
-    console.info('[SOCKET] Connected');
-  })
-  .on('disconnect', function _onDisconnect () {
-    console.info('[SOCKET] Disconnected');
-  });
+    })
+    .on('connect', function _onConnect () {
+      console.info('[SOCKET] Connected');
+    })
+    .on('disconnect', function _onDisconnect () {
+      console.info('[SOCKET] Disconnected');
+    });
 }
 
 function registerReservation (reservationObject) {

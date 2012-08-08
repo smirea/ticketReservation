@@ -88,14 +88,18 @@ function setupMenu () {
                   '</tr>'
                 );
               };
-              statusUpdate('Reservation complete! ',
-                            '<div><b>number:</b> ' + result.number + '</div>'+
-                            '<div><b>name:</b> ' + result.name + '</div>' +
-                            '<div><b>email:</b> ' + result.email + '</div>' +
-                            '<table>' +
-                              '<tr><th colspan="2">Codes:</th></tr>' +
-                              codes.join("\n") +
-                            '</table>'
+              statusUpdate(
+                'Reservation complete! ',
+                (!result.number ? '' :
+                  '<div><b>number:</b> ' + result.number + '</div>') +
+                  (!result.name ? '' :
+                  '<div><b>name:</b> ' + result.name + '</div>') +
+                  (!result.email ? '' :
+                    '<div><b>email:</b> ' + result.email + '</div>') +
+                  '<table>' +
+                  '<tr><th colspan="2">Codes:</th></tr>' +
+                  codes.join("\n") +
+                  '</table>'
               );
             }
           });

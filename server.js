@@ -45,6 +45,10 @@ io.sockets.on('connection', function (socket) {
       var newReservation = cloneObject(reservations[i]);
       newReservation.seats = Object.keys(newReservation.codes);
       delete newReservation.codes;
+
+      //HACK: delete this when you actually can distinguish between socket types
+      delete newReservation.email;
+
       stateObject.reservations[i] = newReservation;
     }
     socket.emit('loadState', stateObject);
@@ -161,6 +165,10 @@ function setupSocket (socket) {
         codes: codes    // maps: seat_name -> seat_code
       };
       reservations.push(reservationObject);
+
+      //HACK: delete this when you actually can distinguish between socket types
+      delete reservationObject.email;
+
       callback(reservationObject);
       var publicReservationObject = cloneObject(reservationObject);
       delete publicReservationObject.codes;
